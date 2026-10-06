@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>AI Agent — Command Console</title>
+<meta name="description" content="A safe, installable AI agent console. Type or speak a command in Hindi, Hinglish or English and the agent runs real actions on your device." />
+<meta name="theme-color" content="#0A0C11" />
+<meta name="color-scheme" content="dark" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="AI Agent" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+
+  <header class="app-header">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6l-8-4Z"/>
+          <path d="m9 12 2 2 4-4"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>AI Agent</h1>
+        <span id="statusText" class="status">Idle</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button id="installBtn" class="icon-btn ghost" hidden title="Install app" aria-label="Install app">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      </button>
+      <button id="settingsBtn" class="icon-btn ghost" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div id="modeBanner" class="mode-banner" hidden>
+    <span id="modeBannerText"></span>
+    <button id="modeBannerBtn" class="link-btn">Set up</button>
+  </div>
+
+  <main id="chat" class="chat" aria-live="polite" aria-label="Conversation"></main>
+
+  <section id="debugPanel" class="debug-panel" hidden aria-label="Tool debug">
+    <div class="debug-head">
+      <span class="dot" aria-hidden="true"></span>
+      <strong>Tool debug</strong>
+      <button id="debugToggle" class="link-btn">Hide</button>
+    </div>
+    <dl class="debug-grid">
+      <dt>Intent</dt><dd id="dbgIntent">—</dd>
+      <dt>Tool</dt><dd id="dbgTool">—</dd>
+      <dt>Args</dt><dd id="dbgArgs">—</dd>
+      <dt>Status</dt><dd id="dbgStatus">—</dd>
+      <dt>Engine</dt><dd id="dbgEngine">—</dd>
+    </dl>
+  </section>
+
+  <footer class="composer">
+    <div class="quick-chips" id="quickChips" aria-label="Quick commands">
+      <button class="chip" data-cmd="YouTube खोलो">YouTube खोलो</button>
+      <button class="chip" data-cmd="Instagram खोलो">Instagram खोलो</button>
+      <button class="chip" data-cmd="Chrome खोलो">Chrome खोलो</button>
+      <button class="chip" data-cmd="Settings खोलो">Settings खोलो</button>
+      <button class="chip" data-cmd="Home पर जाओ">Home पर जाओ</button>
+      <button class="chip" data-cmd="Back दबाओ">Back दबाओ</button>
+      <button class="chip" data-cmd="मेरे YouTube videos दिखाओ">YouTube videos</button>
+    </div>
+    <form id="composerForm" class="input-row" autocomplete="off">
+      <button type="button" id="micBtn" class="icon-btn mic" title="Speak a command" aria-label="Speak a command">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <input id="input" class="text-input" type="text" placeholder="Type a command… e.g. YouTube खोलो" aria-label="Command" enterkeyhint="send" />
+      <button type="submit" id="sendBtn" class="icon-btn send" title="Send" aria-label="Send">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>
+      </button>
+    </form>
+  </footer>
+</div>
+
+<!-- Settings sheet -->
+<div id="sheetOverlay" class="sheet-overlay" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="sheet-head">
+      <h2 id="sheetTitle">Settings</h2>
+      <button id="sheetClose" class="icon-btn ghost" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+
+    <div class="field">
+      <label for="provider">AI engine</label>
+      <select id="provider">
+        <option value="none">Offline commands only (no key needed)</option>
+        <option value="gemini">Google Gemini</option>
+        <option value="openai">OpenAI-compatible</option>
+      </select>
+      <p class="hint">Offline mode understands app, home, back and YouTube commands without any key. Add a key for free-form AI chat.</p>
+    </div>
+
+    <div id="aiFields" hidden>
+      <div class="field">
+        <label for="apiKey">API key</label>
+        <input id="apiKey" type="password" placeholder="Paste your API key" autocomplete="off" spellcheck="false" />
+        <p class="hint">Stored only in this browser (localStorage). It is sent directly to the provider you chose — never to us.</p>
+      </div>
+      <div class="field">
+        <label for="model">Model</label>
+        <input id="model" type="text" placeholder="e.g. gemini-2.0-flash" autocomplete="off" spellcheck="false" />
+      </div>
+      <div class="field" id="baseUrlField" hidden>
+        <label for="baseUrl">Base URL</label>
+        <input id="baseUrl" type="url" placeholder="https://api.openai.com/v1" autocomplete="off" spellcheck="false" />
+      </div>
+    </div>
+
+    <div class="field row-field">
+      <label for="debugSwitch">Show tool debug panel</label>
+      <input id="debugSwitch" type="checkbox" class="switch" />
+    </div>
+
+    <div class="field row-field">
+      <label for="webFallback">Open web version when an app is not installed</label>
+      <input id="webFallback" type="checkbox" class="switch" />
+    </div>
+
+    <div class="sheet-actions">
+      <button id="clearChat" class="btn ghost">Clear chat</button>
+      <button id="saveSettings" class="btn primary">Save</button>
+    </div>
+
+    <div class="about">
+      <p><strong>What a web app can and cannot do</strong></p>
+      <ul>
+        <li>✅ Open installed apps on Android via intent links</li>
+        <li>✅ Voice input, chat, offline commands, install to home screen</li>
+        <li>⚠️ Cannot press the system Home or Back button — browsers block that</li>
+        <li>⚠️ Cannot list your installed apps or read your YouTube account (needs OAuth)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
