@@ -125,7 +125,8 @@
       </div>
       <div class="field">
         <label for="model">Model</label>
-        <input id="model" type="text" placeholder="e.g. gemini-2.0-flash" autocomplete="off" spellcheck="false" />
+        <input id="model" type="text" list="geminiModels" placeholder="e.g. gemini-flash-latest" autocomplete="off" spellcheck="false" />
+        <p class="hint" id="modelHint">Suggested: gemini-flash-latest (rolling alias — hamesha chalta rahega).</p>
       </div>
       <div class="field" id="baseUrlField" hidden>
         <label for="baseUrl">Base URL</label>
@@ -161,6 +162,17 @@
 </div>
 
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<datalist id="geminiModels">
+  <option value="gemini-flash-latest"></option>
+  <option value="gemini-3.8-flash"></option>
+  <option value="gemini-2.5-flash-lite"></option>
+  <option value="gemini-3.1-pro-preview"></option>
+</datalist>
+<datalist id="openaiModels">
+  <option value="gpt-4o-mini"></option>
+  <option value="gpt-4o"></option>
+</datalist>
 
 <div id="installHelp" class="sheet-overlay" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="installHelpTitle">

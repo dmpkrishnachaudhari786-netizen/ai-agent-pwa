@@ -283,23 +283,42 @@ const TOOL_DECLARATIONS = [
 function activeProvider() {
   return settings.provider !== 'none' && settings.apiKey ? settings.provider : null;
 }
+const GEMINI_FALLBACK_MODEL = 'gemini-flash-latest';
+const GEMINI_MODEL_SUGGESTIONS = ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-2.5-flash-lite', 'gemini-3.1-pro-preview'];
+
 function defaultModel(provider) {
   if (settings.model) return settings.model;
-  return provider === 'gemini' ? 'gemini-2.0-flash' : 'gpt-4o-mini';
+  return provider === 'gemini' ? GEMINI_FALLBACK_MODEL : 'gpt-4o-mini';
 }
 
 /* --- Gemini --- */
-async function geminiGenerate(contents) {
-  const model = defaultModel('gemini');
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/'
-    + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(settings.apiKey);
-  const body = {
+function geminiBody(contents) {
+  return {
     contents,
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
     tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
-    toolConfig: { functionCallingConfig: { mode: 'AUTO', allowedFunctionNames: TOOL_DECLARATIONS.map(t => t.name) } },
+    // NOTE: allowedFunctionNames is only accepted with mode 'ANY'. Sending it with
+    // 'AUTO' is rejected by the current API (HTTP 400).
+    toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
   };
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+}
+async function geminiCall(model, contents) {
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/'
+    + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(settings.apiKey);
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(geminiBody(contents)),
+  });
+}
+async function geminiGenerate(contents) {
+  let model = defaultModel('gemini');
+  let r = await geminiCall(model, contents);
+  // Retired model names return 404 — transparently retry on the rolling alias.
+  if (r.status === 404 && model !== GEMINI_FALLBACK_MODEL) {
+    const retry = await geminiCall(GEMINI_FALLBACK_MODEL, contents);
+    if (retry.ok) { model = GEMINI_FALLBACK_MODEL; r = retry; }
+  }
   if (!r.ok) throw new Error('HTTP_' + r.status + ': ' + (await r.text()).slice(0, 240));
   const j = await r.json();
   const content = j.candidates && j.candidates[0] && j.candidates[0].content;
@@ -515,6 +534,9 @@ function readableError(e) {
   const raw = (e && e.message) ? e.message : String(e);
   if (/HTTP_401|HTTP_403/.test(raw)) return 'API key ग़लत या unauthorized है। Settings में key जाँचें।';
   if (/HTTP_429/.test(raw)) return 'API rate limit हो गया — थोड़ी देर बाद try करें।';
+  if (/HTTP_404/.test(raw)) return 'यह AI model अब available नहीं है (retire हो गया)। Settings → Model में gemini-flash-latest रखें।';
+  if (/HTTP_400/.test(raw)) return 'AI request reject हुई (format/model ग़लत)। Settings में model की जाँच करें।';
+  if (/HTTP_5\d\d/.test(raw)) return 'AI server व्यस्त है (temporary)। थोड़ी देर बाद try करें।';
   if (/HTTP_/.test(raw)) return 'AI provider error: ' + raw;
   if (/Failed to fetch|NetworkError|load failed/i.test(raw)) return 'Network/AI provider से connection नहीं हुआ। Internet जाँचें (या API endpoint block है)।';
   if (/MAX_TOOL_CALLS/.test(raw)) return 'मैं इस task को सुरक्षित रूप से पूरा नहीं कर पाया (tool limit)।';
@@ -579,7 +601,20 @@ function syncSheet() {
   const p = el('provider').value;
   el('aiFields').hidden = p === 'none';
   el('baseUrlField').hidden = p !== 'openai';
-  el('model').placeholder = p === 'gemini' ? 'e.g. gemini-2.0-flash' : (p === 'openai' ? 'e.g. gpt-4o-mini' : '');
+  const model = el('model');
+  if (p === 'gemini') {
+    model.placeholder = 'e.g. gemini-flash-latest';
+    model.setAttribute('list', 'geminiModels');
+    el('modelHint').textContent = 'Suggested: gemini-flash-latest (rolling alias — hamesha chalta rahega).';
+  } else if (p === 'openai') {
+    model.placeholder = 'e.g. gpt-4o-mini';
+    model.setAttribute('list', 'openaiModels');
+    el('modelHint').textContent = 'Koi bhi OpenAI-compatible model, e.g. gpt-4o-mini.';
+  } else {
+    model.placeholder = '';
+    model.removeAttribute('list');
+    el('modelHint').textContent = '';
+  }
 }
 el('settingsBtn').addEventListener('click', openSheet);
 el('sheetClose').addEventListener('click', closeSheet);
