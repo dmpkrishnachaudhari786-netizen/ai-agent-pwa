@@ -890,6 +890,16 @@ function boot() {
     setTimeout(openInstallHelp, 900);
   }
   if ('serviceWorker' in navigator) {
+    // When a NEW version takes control, reload once so the user sees it immediately.
+    // (First-ever install does not trigger a reload.)
+    let hadController = !!navigator.serviceWorker.controller;
+    let refreshed = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController) { hadController = true; return; }
+      if (refreshed) return;
+      refreshed = true;
+      location.reload();
+    });
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js').catch(() => {});
     });
