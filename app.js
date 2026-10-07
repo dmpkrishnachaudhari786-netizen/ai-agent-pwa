@@ -47,6 +47,7 @@ const APP_REGISTRY = {
   photos:     { label: 'Photos',     pkg: 'com.google.android.apps.photos',  web: 'https://photos.google.com',        aliases: ['photos', 'gallery', 'फोटो', 'गैलरी'] },
   youtube_music: { label: 'YouTube Music', pkg: 'com.google.android.apps.youtube.music', web: 'https://music.youtube.com', aliases: ['yt music', 'youtube music', 'यूट्यूब म्यूजिक'] },
   drive:      { label: 'Drive',      pkg: 'com.google.android.apps.docs',   web: 'https://drive.google.com',         aliases: ['drive', 'google drive', 'ड्राइव'] },
+  canva:      { label: 'Canva',      pkg: 'com.canva.editor',               web: 'https://www.canva.com',            aliases: ['canva', 'कैनवा', 'kanva'] },
 };
 
 function resolveApp(name) {
@@ -192,6 +193,7 @@ const APP_SEARCH = {
   x:             { web: q => 'https://x.com/search?q=' + enc(q) },
   facebook:      { web: q => 'https://www.facebook.com/search/top?q=' + enc(q) },
   chrome:        { web: q => 'https://www.google.com/search?q=' + enc(q) },
+  canva:         { web: q => 'https://www.canva.com/search?q=' + enc(q) },
 };
 
 function isAndroid() { return /Android/i.test(navigator.userAgent); }
@@ -686,6 +688,41 @@ function syncSheet() {
     el('modelHint').textContent = '';
   }
 }
+/* ---------------------------- Connected apps ----------------------------- */
+const CONNECT_APPS = [
+  { key: 'instagram',     label: 'Instagram',     can: 'Open + andar search',      cant: 'Like / post / upload — official API chahiye' },
+  { key: 'canva',         label: 'Canva',         can: 'Open + template search',   cant: 'Auto video-edit — Canva API chahiye' },
+  { key: 'youtube',       label: 'YouTube',       can: 'Open + andar search',      cant: '—' },
+  { key: 'youtube_music', label: 'YouTube Music', can: 'Open + andar search',      cant: '—' },
+  { key: 'whatsapp',      label: 'WhatsApp',      can: 'Open',                     cant: 'Message bhejna — official API chahiye' },
+  { key: 'spotify',       label: 'Spotify',       can: 'Open + andar search',      cant: '—' },
+  { key: 'gmail',         label: 'Gmail',         can: 'Open + mail search',       cant: 'Mail bhejna — official API chahiye' },
+  { key: 'drive',         label: 'Drive',         can: 'Open + file search',       cant: '—' },
+  { key: 'photos',        label: 'Photos',        can: 'Open + photo search',      cant: '—' },
+  { key: 'maps',          label: 'Maps',          can: 'Open + jagah search',      cant: '—' },
+  { key: 'x',             label: 'X',             can: 'Open + andar search',      cant: 'Post karna — official API chahiye' },
+  { key: 'facebook',      label: 'Facebook',      can: 'Open + andar search',      cant: 'Post karna — official API chahiye' },
+];
+
+function renderAppList() {
+  const list = el('appList');
+  if (!list) return;
+  list.innerHTML = CONNECT_APPS.map(a =>
+    '<button type="button" class="app-row" data-app="' + a.key + '">'
+    + '<span class="app-name">' + esc(a.label) + '</span>'
+    + '<span class="app-can">✅ ' + esc(a.can) + '</span>'
+    + '<span class="app-cant">🔒 ' + esc(a.cant) + '</span>'
+    + '<span class="app-arrow" aria-hidden="true">›</span>'
+    + '</button>').join('');
+}
+
+el('appList').addEventListener('click', (e) => {
+  const row = e.target.closest('.app-row');
+  if (!row) return;
+  closeSheet();
+  runToolFlow({ intent: 'OPEN_APP', tool: 'open_app', args: { app_name: row.dataset.app } }, 'panel');
+});
+
 el('settingsBtn').addEventListener('click', openSheet);
 el('sheetClose').addEventListener('click', closeSheet);
 el('sheetOverlay').addEventListener('click', (e) => { if (e.target === el('sheetOverlay')) closeSheet(); });
@@ -841,6 +878,7 @@ function boot() {
   } catch {}
   applyDebugVisibility();
   updateModeBanner();
+  renderAppList();
   addMessage('assistant', greeting(), true);
   setStatus('Idle');
   setDebug('—', '—', null, 'Idle', activeProvider() || 'parser');
