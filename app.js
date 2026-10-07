@@ -638,6 +638,9 @@ function isIOS() {
 function installDismissed() {
   try { return localStorage.getItem(INSTALL_DISMISS_KEY) === '1'; } catch { return false; }
 }
+const HELP_SEEN_KEY = 'aiagent.installHelpSeen.v1';
+function helpSeen() { try { return localStorage.getItem(HELP_SEEN_KEY) === '1'; } catch { return true; } }
+function markHelpSeen() { try { localStorage.setItem(HELP_SEEN_KEY, '1'); } catch {} }
 function platformSteps() {
   if (isIOS()) return {
     title: 'iPhone / iPad',
@@ -731,6 +734,11 @@ function boot() {
   setDebug('—', '—', null, 'Idle', activeProvider() || 'parser');
   initSpeech();
   showInstallUI();
+  // First visit on an uninstalled device: show the install steps straight away.
+  if (!isStandalone() && !helpSeen()) {
+    markHelpSeen();
+    setTimeout(openInstallHelp, 900);
+  }
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js').catch(() => {});
