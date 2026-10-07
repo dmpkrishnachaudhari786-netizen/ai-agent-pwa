@@ -5,11 +5,16 @@ voice or text commands. Built as the web/PWA counterpart of the Android AI-Agent
 
 **Live app:** https://dmpkrishnachaudhari786-netizen.github.io/ai-agent-pwa/
 
-## Install it on your phone
+## Install it on your phone (this makes it a real app)
 
 1. Open the live link in **Chrome on Android**.
-2. Tap the **install** icon in the app header (or Chrome menu → *Add to Home screen*).
-3. It opens full-screen like a native app and works offline.
+2. An **"Install as an app"** banner appears at the top — tap **Install**.
+   (No banner? Tap the **install icon** in the header, or Chrome menu **⋮ → Install app / Add to Home screen**.)
+3. Confirm. The icon lands on your home screen and opens **full screen**, offline, like any native app.
+
+Once installed you also get **app shortcuts** — long-press the icon for *YouTube खोलो*, *Camera kholo*, *WhatsApp kholo*.
+
+On **iPhone/iPad** use **Safari** (not Chrome) → Share → *Add to Home Screen*.
 
 ## What actually works
 

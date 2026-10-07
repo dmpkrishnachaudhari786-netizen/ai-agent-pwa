@@ -127,6 +127,32 @@ ul { padding-left: 1.1em; }
 }
 .mode-banner #modeBannerText { min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
 .mode-banner .link-btn { margin-left: auto; flex: none; }
+
+/* ============ Install banner ============ */
+.install-banner {
+  display: flex; align-items: center; gap: var(--sp-3);
+  flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4);
+  background: linear-gradient(100deg, rgba(110,155,255,.14), rgba(139,124,255,.10));
+  border-bottom: 1px solid rgba(110,155,255,.28);
+  animation: rise var(--t-med) both;
+}
+.ib-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.ib-text strong { font-size: 14px; }
+.ib-text span { font-size: 12px; color: var(--muted); }
+.btn.sm { flex: none; padding: 9px 18px; font-size: 14px; width: auto; }
+.install-banner .icon-btn { width: 34px; height: 34px; flex: none; }
+
+/* ============ Install help ============ */
+.install-help { font-size: 14px; color: var(--muted); }
+.install-help ol { padding-left: 1.2em; margin: 0 0 var(--sp-4); }
+.install-help li { margin-bottom: var(--sp-2); }
+.install-help strong { color: var(--text); }
+.install-help .note {
+  padding: var(--sp-3); border-radius: var(--r-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+  margin-bottom: var(--sp-4);
+}
 .link-btn {
   background: none; border: none; color: var(--accent);
   font-size: 13px; padding: 0; text-decoration: underline;

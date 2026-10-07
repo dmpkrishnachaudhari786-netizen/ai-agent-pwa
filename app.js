@@ -616,25 +616,111 @@ el('debugToggle').addEventListener('click', () => {
 function applyDebugVisibility() { debugPanel.hidden = !settings.debug; }
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !el('sheetOverlay').hidden) closeSheet();
+  if (e.key !== 'Escape') return;
+  if (!el('sheetOverlay').hidden) closeSheet();
+  if (!el('installHelp').hidden) closeInstallHelp();
 });
 
 /* ------------------------------ PWA install ------------------------------ */
+const INSTALL_DISMISS_KEY = 'aiagent.installDismissed.v1';
 let deferredPrompt = null;
+
+function isStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches
+    || window.matchMedia('(display-mode: fullscreen)').matches
+    || window.matchMedia('(display-mode: minimal-ui)').matches
+    || window.navigator.standalone === true;
+}
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function installDismissed() {
+  try { return localStorage.getItem(INSTALL_DISMISS_KEY) === '1'; } catch { return false; }
+}
+function platformSteps() {
+  if (isIOS()) return {
+    title: 'iPhone / iPad',
+    steps: [
+      'Ye page <strong>Safari</strong> me kholo (iOS pe Chrome install support nahi karta).',
+      'Neeche <strong>Share</strong> button (□↑) dabao.',
+      '<strong>Add to Home Screen</strong> chuno, phir <strong>Add</strong> dabao.',
+    ],
+  };
+  if (/Android/i.test(navigator.userAgent)) return {
+    title: 'Android',
+    steps: [
+      'Ye page <strong>Chrome</strong> me kholo.',
+      'Upar right corner me <strong>⋮</strong> (menu) dabao.',
+      '<strong>Install app</strong> ya <strong>Add to Home screen</strong> chuno.',
+      'Confirm karo — icon home screen pe aa jaayega, full screen khulega.',
+    ],
+  };
+  return {
+    title: 'Desktop (Chrome / Edge)',
+    steps: [
+      'Ye page Chrome ya Edge me kholo.',
+      'Address bar ke right me <strong>install</strong> (⤓ ya monitor) icon dabao.',
+      'Ya browser menu → <strong>Install AI Agent</strong> chuno.',
+    ],
+  };
+}
+function openInstallHelp() {
+  const p = platformSteps();
+  el('installHelpBody').innerHTML =
+    '<div class="note">Tumhare device ke liye: <strong>' + esc(p.title) + '</strong></div>'
+    + '<ol>' + p.steps.map(s => '<li>' + s + '</li>').join('') + '</ol>'
+    + '<div class="note">Install button na dikhe? Page ko thoda scroll/use karo ya reload karo — '
+    + 'Chrome ko install prompt dikhane se pehle thodi engagement chahiye. Menu wala tareeka har haal me chalta hai.</div>';
+  el('installHelp').hidden = false;
+}
+function closeInstallHelp() { el('installHelp').hidden = true; }
+
+function showInstallUI() {
+  if (isStandalone()) {
+    el('installBtn').hidden = true;
+    el('installBanner').hidden = true;
+    return;
+  }
+  el('installBtn').hidden = false;
+  el('installBanner').hidden = installDismissed();
+}
+
+async function doInstall() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    if (outcome === 'accepted') {
+      el('installBanner').hidden = true;
+      el('installBtn').hidden = true;
+      toast('Install ho gaya 🎉');
+    } else {
+      toast('Install cancel kiya');
+    }
+    return;
+  }
+  openInstallHelp();
+}
+
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  el('installBtn').hidden = false;
+  showInstallUI();
 });
-el('installBtn').addEventListener('click', async () => {
-  if (!deferredPrompt) { toast('Browser menu → “Add to Home screen”'); return; }
-  deferredPrompt.prompt();
-  const { outcome } = await deferredPrompt.userChoice;
-  deferredPrompt = null;
+window.addEventListener('appinstalled', () => {
   el('installBtn').hidden = true;
-  toast(outcome === 'accepted' ? 'App install हो गया 🎉' : 'Install cancel किया');
+  el('installBanner').hidden = true;
+  toast('App install ho gaya 🎉');
 });
-window.addEventListener('appinstalled', () => { el('installBtn').hidden = true; toast('App install हो गया 🎉'); });
+el('installBtn').addEventListener('click', doInstall);
+el('installBannerBtn').addEventListener('click', doInstall);
+el('installDismiss').addEventListener('click', () => {
+  el('installBanner').hidden = true;
+  try { localStorage.setItem(INSTALL_DISMISS_KEY, '1'); } catch {}
+});
+el('installHelpClose').addEventListener('click', closeInstallHelp);
+el('installHelp').addEventListener('click', (e) => { if (e.target === el('installHelp')) closeInstallHelp(); });
 
 /* -------------------------------- Boot ---------------------------------- */
 function boot() {
@@ -644,10 +730,19 @@ function boot() {
   setStatus('Idle');
   setDebug('—', '—', null, 'Idle', activeProvider() || 'parser');
   initSpeech();
+  showInstallUI();
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js').catch(() => {});
     });
   }
+  // App-shortcut deep links: ?cmd=YouTube%20खोलो
+  try {
+    const cmd = new URLSearchParams(location.search).get('cmd');
+    if (cmd) {
+      history.replaceState(null, '', location.pathname);
+      setTimeout(() => runAgent(cmd), 400);
+    }
+  } catch {}
 }
 boot();
