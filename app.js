@@ -11,7 +11,7 @@ const DEFAULT_SETTINGS = {
   apiKey: '',
   model: '',
   baseUrl: 'https://api.openai.com/v1',
-  debug: true,
+  debug: false,
   webFallback: true,
 };
 
@@ -80,7 +80,7 @@ const OPEN_WORDS = ['open', 'kholo', 'khol', 'kholna', 'kholiye', 'launch', 'sta
 const HOME_WORDS = ['home', 'ghar', 'घर', 'होम', 'homescreen'];
 const BACK_WORDS = ['back', 'wapas', 'वापस', 'pichhe', 'पीछे', 'peeche'];
 const VIDEO_WORDS = ['video', 'videos', 'वीडियो', 'विडियो'];
-const SEARCH_WORDS = ['search', 'google', 'dhundo', 'ढूंढो', 'खोजो', 'सर्च'];
+const SEARCH_WORDS = ['search', 'google', 'dhundo', 'dhundho', 'dhoondo', 'dhoondh', 'dhunde', 'khojo', 'khoj', 'ढूंढो', 'ढूँढो', 'खोजो', 'खोज', 'सर्च'];
 const STOP_WORDS = new Set([
   'open', 'kholo', 'khol', 'kholna', 'kholiye', 'launch', 'start', 'chalu', 'chalao', 'चालू',
   'खोलो', 'खोल', 'खोलना', 'खोलिए', 'शुरू', 'ओपन', 'चलाओ', 'चला',
@@ -95,6 +95,26 @@ function extractAppName(t) {
   const tokens = t.split(' ').filter(Boolean);
   const kept = tokens.filter(tok => !STOP_WORDS.has(tok));
   return kept.join(' ').trim();
+}
+
+/* Trailing verbs we strip off a search query: "doraemon search karo" -> "doraemon" */
+const SEARCH_TAIL = /\b(search|dhundo|dhundho|dhoondo|dhoondh|dhunde|khojo|khoj|karo|kro|kr|kar|do|de|dikhao|dekho|dekh|dikha)\b/g;
+
+/**
+ * "<app> me/pe/par <query> search karo"  ->  search INSIDE that app.
+ * This is what stops "YouTube me Doraemon search karo" from going to Google.
+ */
+function parseInAppSearch(t) {
+  if (!has(t, SEARCH_WORDS)) return null;
+  const m = t.match(/^(.*?)\s+(?:me|pe|par|में|पर|मे)\s+(.+)$/);
+  if (!m) return null;
+  const left = m[1].trim();
+  if (!left) return null;
+  const app = resolveApp(left);
+  if (!app) return null;
+  const q = m[2].replace(SEARCH_TAIL, ' ').replace(/\s+/g, ' ').trim();
+  if (!q) return null;
+  return { intent: 'SEARCH_IN_APP', tool: 'search_in_app', args: { app: app.key, query: q } };
 }
 
 /**
@@ -119,6 +139,10 @@ function parseCommand(raw) {
   if (has(t, HOME_WORDS)) {
     return { intent: 'GO_HOME', tool: 'go_home', args: {} };
   }
+
+  // 3b) Search INSIDE a specific app ("youtube me doraemon search karo")
+  const inApp = parseInAppSearch(t);
+  if (inApp) return inApp;
 
   // 4) Web search
   if (has(t, SEARCH_WORDS)) {
@@ -148,6 +172,26 @@ const TOOL_LABELS = {
   press_back: 'Going back…',
   list_youtube_videos: 'Checking YouTube…',
   search_web: 'Searching…',
+  search_in_app: 'Searching in app…',
+};
+
+/* Per-app search URLs (web) and, where a real deep link exists, native Android intents. */
+const enc = encodeURIComponent;
+const APP_SEARCH = {
+  youtube:       { web: q => 'https://www.youtube.com/results?search_query=' + enc(q),
+                   native: q => 'intent://results?search_query=' + enc(q) + '#Intent;scheme=vnd.youtube;package=com.google.android.youtube;S.browser_fallback_url=' + enc('https://www.youtube.com/results?search_query=' + enc(q)) + ';end' },
+  youtube_music: { web: q => 'https://music.youtube.com/search?q=' + enc(q) },
+  instagram:     { web: q => 'https://www.instagram.com/explore/search/keyword/?q=' + enc(q) },
+  spotify:       { web: q => 'https://open.spotify.com/search/' + enc(q),
+                   native: q => 'intent://search/' + enc(q) + '#Intent;scheme=spotify;package=com.spotify.music;S.browser_fallback_url=' + enc('https://open.spotify.com/search/' + enc(q)) + ';end' },
+  playstore:     { web: q => 'https://play.google.com/store/search?q=' + enc(q) + '&c=apps' },
+  maps:          { web: q => 'https://www.google.com/maps/search/' + enc(q) },
+  gmail:         { web: q => 'https://mail.google.com/mail/u/0/#search/' + enc(q) },
+  drive:         { web: q => 'https://drive.google.com/drive/search?q=' + enc(q) },
+  photos:        { web: q => 'https://photos.google.com/search/' + enc(q) },
+  x:             { web: q => 'https://x.com/search?q=' + enc(q) },
+  facebook:      { web: q => 'https://www.facebook.com/search/top?q=' + enc(q) },
+  chrome:        { web: q => 'https://www.google.com/search?q=' + enc(q) },
 };
 
 function isAndroid() { return /Android/i.test(navigator.userAgent); }
@@ -206,6 +250,28 @@ async function executeTool(call) {
           entry.label + ' इस device पर launch नहीं हो सकता (यह Android नहीं है और इसका web version उपलब्ध नहीं है)।');
       }
 
+      case 'search_in_app': {
+        const rawApp = String(args.app || '').trim();
+        const q = String(args.query || '').trim();
+        if (!q) return fail(tool, 'INVALID_PARAMETERS', 'Search query खाली है।');
+        // The AI may send a display name ("YouTube"); resolve it to a registry key.
+        const entry = resolveApp(rawApp);
+        if (!entry) return fail(tool, 'APPLICATION_NOT_FOUND', '“' + rawApp + '” मेरी app list में नहीं है।');
+        const s = APP_SEARCH[entry.key];
+        if (!s) {
+          const fb = 'https://www.google.com/search?q=' + enc(q);
+          openExternal(fb);
+          return { success: true, tool,
+            message: entry.label + ' me direct search support नहीं है — Google पर “' + q + '” search खोल दिया ✅',
+            data: { app: entry.label, query: q, url: fb, fallback: true } };
+        }
+        const url = (isAndroid() && s.native) ? s.native(q) : s.web(q);
+        openExternal(url);
+        return { success: true, tool,
+          message: entry.label + ' par “' + q + '” search खोल दिया ✅',
+          data: { app: entry.label, query: q, url: s.web(q) } };
+      }
+
       case 'search_web': {
         const q = String(args.query || '').trim();
         if (!q) return fail(tool, 'INVALID_PARAMETERS', 'Search query खाली है।');
@@ -250,6 +316,8 @@ const SYSTEM_PROMPT =
   + 'Request at most one tool per turn and only use the declared tools. '
   + 'Never invent shell commands, root commands, hidden APIs, security bypasses or accessibility activation. '
   + 'To open an app use open_app with the user-facing app name. '
+  + 'When the user wants to search INSIDE a specific app (e.g. "YouTube me Doraemon search karo", "search cricket on Instagram"), call search_in_app with that app name and the query — do NOT use search_web for that. '
+  + 'Use search_web only for a general internet search that is not tied to an app. '
   + 'Answer concisely and naturally in the same language the user used (Hindi, Hinglish or English).';
 
 const TOOL_DECLARATIONS = [
@@ -257,6 +325,14 @@ const TOOL_DECLARATIONS = [
     name: 'open_app',
     description: 'Open an installed Android app by its user-facing name (YouTube, Chrome, Instagram, Settings, Camera, Calculator…). The client resolves the installed app and launches it.',
     parameters: { type: 'object', properties: { app_name: { type: 'string', description: 'The app name the user wants to open.' } }, required: ['app_name'] },
+  },
+  {
+    name: 'search_in_app',
+    description: 'Search INSIDE a specific app (YouTube, Instagram, Spotify, Play Store, Maps, Gmail, Drive, Photos, X, Facebook, Chrome). Use this whenever the user names an app and a query to search for in it.',
+    parameters: { type: 'object', properties: {
+      app: { type: 'string', description: 'The app to search in, e.g. YouTube, Instagram, Spotify.' },
+      query: { type: 'string', description: 'What to search for inside that app.' },
+    }, required: ['app', 'query'] },
   },
   {
     name: 'search_web',
@@ -426,7 +502,7 @@ function greeting() {
   const p = activeProvider();
   return '<strong>Namaste, Raju.</strong> मैं आपका AI Agent हूँ।\n'
     + 'अभी mode: <span class="' + (p ? 'ok' : 'warn') + '">' + (p ? p.toUpperCase() + ' (AI on)' : 'Offline commands') + '</span>.\n'
-    + 'Try: <em>YouTube खोलो</em>, <em>Camera खोलो</em>, <em>Back दबाओ</em>, या <em>cricket score search करो</em>.';
+    + 'Try: <em>YouTube me Doraemon search karo</em>, <em>Instagram pe cricket search karo</em>, ya <em>Camera kholo</em>.';
 }
 
 /* ------------------------------ Agent flow ------------------------------- */
@@ -476,7 +552,7 @@ async function runAgent(text) {
 async function runToolFlow(call, engine) {
   setStatus(TOOL_LABELS[call.tool] || 'Running tool…', 'busy');
   setDebug(call.intent, call.tool, call.args, 'REQUESTED', engine);
-  addMessage('tool', '→ ' + call.tool + ' ' + JSON.stringify(call.args));
+  if (settings.debug) addMessage('tool', '→ ' + call.tool + ' ' + JSON.stringify(call.args));
 
   const result = await executeTool(call);
   setDebug(call.intent, call.tool, call.args, result.success ? 'SUCCESS' : 'FAILED', engine);
@@ -503,11 +579,11 @@ async function runLlmFlow(userText) {
       if (out.kind === 'final') { addMessage('assistant', out.text); setStatus('Done', 'ok'); setDebug('AI_TURN', '—', null, 'SUCCESS', provider); return; }
       const call = { intent: out.name.toUpperCase(), tool: out.name, args: out.args };
       setDebug(call.intent, call.tool, call.args, 'REQUESTED', provider);
-      addMessage('tool', '→ ' + call.tool + ' ' + JSON.stringify(call.args));
+      if (settings.debug) addMessage('tool', '→ ' + call.tool + ' ' + JSON.stringify(call.args));
       const result = await executeTool(call);
       setDebug(call.intent, call.tool, call.args, result.success ? 'SUCCESS' : 'FAILED', provider);
       history.push({ role: 'user', parts: [{ functionResponse: { name: call.tool, response: { success: result.success, message: result.message || '', error: result.error || '', data: result.data || {} } } }] });
-      if (result.message) addMessage('tool', '← ' + result.message);
+      if (settings.debug && result.message) addMessage('tool', '← ' + result.message);
     }
     throw new Error('MAX_TOOL_CALLS_EXCEEDED');
   }
@@ -521,11 +597,11 @@ async function runLlmFlow(userText) {
     if (out.kind === 'final') { addMessage('assistant', out.text); setStatus('Done', 'ok'); setDebug('AI_TURN', '—', null, 'SUCCESS', provider); return; }
     const call = { intent: out.name.toUpperCase(), tool: out.name, args: out.args };
     setDebug(call.intent, call.tool, call.args, 'REQUESTED', provider);
-    addMessage('tool', '→ ' + call.tool + ' ' + JSON.stringify(call.args));
+    if (settings.debug) addMessage('tool', '→ ' + call.tool + ' ' + JSON.stringify(call.args));
     const result = await executeTool(call);
     setDebug(call.intent, call.tool, call.args, result.success ? 'SUCCESS' : 'FAILED', provider);
     messages.push({ role: 'tool', tool_call_id: out.toolCallId, content: JSON.stringify({ success: result.success, message: result.message || '', error: result.error || '' }) });
-    if (result.message) addMessage('tool', '← ' + result.message);
+    if (settings.debug && result.message) addMessage('tool', '← ' + result.message);
   }
   throw new Error('MAX_TOOL_CALLS_EXCEEDED');
 }
@@ -577,12 +653,6 @@ el('composerForm').addEventListener('submit', (e) => {
   const v = input.value;
   input.value = '';
   runAgent(v);
-});
-
-el('quickChips').addEventListener('click', (e) => {
-  const b = e.target.closest('.chip');
-  if (!b) return;
-  runAgent(b.dataset.cmd);
 });
 
 // Settings sheet
@@ -762,6 +832,13 @@ el('installHelp').addEventListener('click', (e) => { if (e.target === el('instal
 
 /* -------------------------------- Boot ---------------------------------- */
 function boot() {
+  // One-time: move existing installs to the clean chat view (no raw tool-trace lines).
+  try {
+    if (localStorage.getItem('aiagent.traceOff.v1') !== '1') {
+      localStorage.setItem('aiagent.traceOff.v1', '1');
+      if (settings.debug) { settings.debug = false; saveSettings(); }
+    }
+  } catch {}
   applyDebugVisibility();
   updateModeBanner();
   addMessage('assistant', greeting(), true);

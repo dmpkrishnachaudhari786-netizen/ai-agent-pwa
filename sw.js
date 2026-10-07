@@ -1,5 +1,5 @@
 /* AI Agent — service worker: offline app shell */
-const CACHE = 'aiagent-shell-v3';
+const CACHE = 'aiagent-shell-v4';
 const ASSETS = [
   './',
   './index.html',
